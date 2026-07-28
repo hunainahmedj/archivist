@@ -1,0 +1,8 @@
+{
+  "project": "{{PROJECT}}",
+  "layout": "{{LAYOUT}}",
+  "repos": [
+    { "path": "{{REPO_PATH}}", "role": "{{REPO_ROLE}}" }
+  ],
+  "tracker": { "type": "{{TRACKER_TYPE}}", "projectKey": "{{TRACKER_KEY}}" }
+}

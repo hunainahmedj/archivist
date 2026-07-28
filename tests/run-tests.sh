@@ -1,0 +1,205 @@
+#!/bin/bash
+# Test harness for the archivist doc gate. Plain bash, no framework.
+set -u
+HERE="$(cd "$(dirname "$0")" && pwd)"
+GATE="$HERE/../hooks/doc-gate.sh"
+PASS=0; FAIL=0; SANDBOX=""
+
+setup()    { SANDBOX="$(mktemp -d)"; }
+teardown() { rm -rf "$SANDBOX"; }
+
+mkrepo() {
+  mkdir -p "$1"
+  git -C "$1" init -q
+  git -C "$1" -c user.email=t@t -c user.name=t commit -q --allow-empty -m init
+}
+
+embedded_ws() {  # monorepo: ws/ is one git repo with docs/ + web/ inside
+  mkrepo "$SANDBOX/ws"
+  mkdir -p "$SANDBOX/ws/docs/07-meta" "$SANDBOX/ws/web"
+  cat > "$SANDBOX/ws/docs/.archivist.json" <<'EOF'
+{"project":"t","layout":"embedded","repos":[{"path":"web","role":"app"}],"tracker":{"type":"self","prefix":"T"}}
+EOF
+  git -C "$SANDBOX/ws" add -A
+  git -C "$SANDBOX/ws" -c user.email=t@t -c user.name=t commit -qm docs
+}
+
+sibling_ws() {  # multi-repo: ws/backend and ws/docs are separate git repos
+  mkdir -p "$SANDBOX/ws"
+  mkrepo "$SANDBOX/ws/backend"
+  mkrepo "$SANDBOX/ws/docs"
+  mkdir -p "$SANDBOX/ws/docs/07-meta"
+  cat > "$SANDBOX/ws/docs/.archivist.json" <<'EOF'
+{"project":"t","layout":"sibling","repos":[{"path":"backend","role":"api"}],"tracker":{"type":"jira","projectKey":"T"}}
+EOF
+  git -C "$SANDBOX/ws/docs" add -A
+  git -C "$SANDBOX/ws/docs" -c user.email=t@t -c user.name=t commit -qm docs
+}
+
+run_gate() {  # $1=cwd  $2=stop_active(optional)  $3=session_id(optional)
+  ARCHIVIST_CWD="$1" \
+  ARCHIVIST_STOP_ACTIVE="${2:-}" \
+  ARCHIVIST_SESSION_ID="${3:-test-$$}" \
+  bash "$GATE"
+}
+
+check() {  # $1=description  $2=expected_exit  $3=actual_exit
+  if [ "$2" -eq "$3" ]; then PASS=$((PASS+1)); echo "ok   - $1"
+  else FAIL=$((FAIL+1)); echo "FAIL - $1 (expected exit $2, got $3)"; fi
+}
+
+test_no_config_allows() {
+  setup; mkrepo "$SANDBOX/plain"
+  run_gate "$SANDBOX/plain" >/dev/null 2>&1; check "no .archivist.json -> allow" 0 $?
+  teardown
+}
+
+test_embedded_code_change_blocks() {
+  setup; embedded_ws
+  echo "x" > "$SANDBOX/ws/web/app.ts"
+  run_gate "$SANDBOX/ws/web" >/dev/null 2>&1; check "embedded: code changed, docs untouched -> block" 3 $?
+  teardown
+}
+
+test_embedded_code_plus_docs_allows() {
+  setup; embedded_ws
+  echo "x" > "$SANDBOX/ws/web/app.ts"
+  echo "entry" >> "$SANDBOX/ws/docs/07-meta/changelog.md"
+  run_gate "$SANDBOX/ws/web" >/dev/null 2>&1; check "embedded: code + docs changed -> allow" 0 $?
+  teardown
+}
+
+test_md_only_change_allows() {
+  setup; embedded_ws
+  echo "notes" > "$SANDBOX/ws/web/README.md"
+  run_gate "$SANDBOX/ws/web" >/dev/null 2>&1; check "markdown-only change -> allow" 0 $?
+  teardown
+}
+
+test_no_changes_allows() {
+  setup; embedded_ws
+  run_gate "$SANDBOX/ws/web" >/dev/null 2>&1; check "clean tree -> allow" 0 $?
+  teardown
+}
+
+test_stop_active_allows() {
+  setup; embedded_ws
+  echo "x" > "$SANDBOX/ws/web/app.ts"
+  run_gate "$SANDBOX/ws/web" "1" >/dev/null 2>&1; check "stop_hook_active -> allow (loop protection)" 0 $?
+  teardown
+}
+
+test_sibling_code_change_blocks() {
+  setup; sibling_ws
+  echo "x" > "$SANDBOX/ws/backend/api.ts"
+  run_gate "$SANDBOX/ws/backend" >/dev/null 2>&1; check "sibling: code changed, docs repo untouched -> block" 3 $?
+  teardown
+}
+
+test_sibling_docs_touched_allows() {
+  setup; sibling_ws
+  echo "x" > "$SANDBOX/ws/backend/api.ts"
+  echo "entry" >> "$SANDBOX/ws/docs/07-meta/changelog.md"
+  run_gate "$SANDBOX/ws/backend" >/dev/null 2>&1; check "sibling: code + docs changed -> allow" 0 $?
+  teardown
+}
+
+test_missing_docs_repo_warns_once() {
+  setup
+  mkdir -p "$SANDBOX/ws"; mkrepo "$SANDBOX/ws/backend"
+  printf '@../docs/AGENTS.md\n' > "$SANDBOX/ws/backend/CLAUDE.md"
+  sid="warn-$RANDOM"
+  out="$(run_gate "$SANDBOX/ws/backend" "" "$sid" 2>/dev/null)"
+  check "missing sibling docs repo -> allow" 0 $?
+  printf '%s' "$out" | grep -q "Docs repo missing"
+  check "missing docs repo -> warns" 0 $?
+  out2="$(run_gate "$SANDBOX/ws/backend" "" "$sid" 2>/dev/null)"
+  [ -z "$out2" ]
+  check "warning fires once per session" 0 $?
+  teardown
+}
+
+test_block_message_names_docs_root() {
+  setup; embedded_ws
+  echo "x" > "$SANDBOX/ws/web/app.ts"
+  out="$(run_gate "$SANDBOX/ws/web" 2>/dev/null)"
+  printf '%s' "$out" | grep -q "documentation-guide.md"
+  check "block message points at the rulebook" 0 $?
+  teardown
+}
+
+ADAPTER="$HERE/../hooks/claude-stop.sh"
+CODEX_START="$HERE/../hooks/codex/codex-session-start.sh"
+
+claude_payload() {  # $1=cwd $2=stop_hook_active(json bool)
+  printf '{"session_id":"s-test","transcript_path":"/tmp/t","cwd":"%s","stop_hook_active":%s}' "$1" "$2"
+}
+
+vendored_hooks() {  # mirrors what /docs-init installs
+  mkdir -p "$SANDBOX/vendored"
+  cp "$HERE/../hooks/doc-gate.sh" "$HERE/../hooks/codex/codex-stop.sh" "$SANDBOX/vendored/"
+}
+
+test_claude_adapter_blocks_with_exit_2() {
+  setup; embedded_ws
+  echo "x" > "$SANDBOX/ws/web/app.ts"
+  err="$(claude_payload "$SANDBOX/ws/web" false | bash "$ADAPTER" 2>&1 >/dev/null)"
+  code=$?
+  check "claude adapter: block -> exit 2" 2 $code
+  printf '%s' "$err" | grep -q "archivist"
+  check "claude adapter: message on stderr" 0 $?
+  teardown
+}
+
+test_claude_adapter_allows() {
+  setup; embedded_ws
+  claude_payload "$SANDBOX/ws/web" false | bash "$ADAPTER" >/dev/null 2>&1
+  check "claude adapter: clean tree -> exit 0" 0 $?
+  teardown
+}
+
+test_claude_adapter_respects_stop_active() {
+  setup; embedded_ws
+  echo "x" > "$SANDBOX/ws/web/app.ts"
+  claude_payload "$SANDBOX/ws/web" true | bash "$ADAPTER" >/dev/null 2>&1
+  check "claude adapter: stop_hook_active=true -> exit 0" 0 $?
+  teardown
+}
+
+test_codex_adapter_blocks_alt_fields() {
+  setup; embedded_ws; vendored_hooks
+  echo "x" > "$SANDBOX/ws/web/app.ts"
+  printf '{"thread_id":"t1","working_directory":"%s","stopHookActive":false}' "$SANDBOX/ws/web" \
+    | bash "$SANDBOX/vendored/codex-stop.sh" >/dev/null 2>&1
+  check "codex adapter (vendored): block with alternate field names -> exit 2" 2 $?
+  teardown
+}
+
+test_codex_session_start_injects_briefing() {
+  setup; sibling_ws
+  echo "BRIEFING-SENTINEL" > "$SANDBOX/ws/docs/AGENTS.md"
+  out="$(cd "$SANDBOX/ws/backend" && bash "$CODEX_START" 2>/dev/null)"
+  printf '%s' "$out" | grep -q "BRIEFING-SENTINEL"
+  check "codex session-start: injects docs AGENTS.md" 0 $?
+  teardown
+}
+
+test_no_config_allows
+test_embedded_code_change_blocks
+test_embedded_code_plus_docs_allows
+test_md_only_change_allows
+test_no_changes_allows
+test_stop_active_allows
+test_sibling_code_change_blocks
+test_sibling_docs_touched_allows
+test_missing_docs_repo_warns_once
+test_block_message_names_docs_root
+test_claude_adapter_blocks_with_exit_2
+test_claude_adapter_allows
+test_claude_adapter_respects_stop_active
+test_codex_adapter_blocks_alt_fields
+test_codex_session_start_injects_briefing
+
+echo "---"
+echo "pass=$PASS fail=$FAIL"
+[ "$FAIL" -eq 0 ]

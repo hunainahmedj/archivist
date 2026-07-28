@@ -1,0 +1,11 @@
+{
+  "name": "archivist-marketplace",
+  "owner": { "name": "Hunain Ahmed Jilani" },
+  "plugins": [
+    {
+      "name": "archivist",
+      "source": "./",
+      "description": "Agent-maintained project documentation system"
+    }
+  ]
+}
