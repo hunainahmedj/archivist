@@ -1,6 +1,6 @@
 ---
 name: docs-init
-description: Scaffold the archivist documentation system for a project — creates the docs tree from the template, configures .archivist.json, wires CLAUDE.md/AGENTS.md briefing loading and Codex hooks. Run once per project from the project root or workspace root.
+description: Scaffold the archivist documentation system for a project — creates the docs tree from the template, configures .archivist.json, wires CLAUDE.md/AGENTS.md briefing loading and Codex hooks. Run once per project, from the workspace root (multi-repo project) or the repo root (monorepo).
 ---
 
 # /docs-init
@@ -11,8 +11,14 @@ The plugin root is two directories above this skill file. `template/` and
 ## 1. Interview (AskUserQuestion where possible, one topic at a time)
 
 - Project name and one-paragraph plain-language description.
-- Layout: count `.git` directories. Multiple sibling repos in cwd →
-  `sibling`; a single repo → `embedded`. Confirm with the user.
+- Layout: detect, then confirm with the user — never trust the guess:
+  - cwd contains multiple sibling git repos → `sibling`; cwd is the
+    workspace root.
+  - cwd is itself a single git repo → check the PARENT directory: if it
+    contains other git repos next to this one, you are standing INSIDE
+    one repo of a sibling workspace — propose `sibling` and treat the
+    parent as the workspace root. Only if the parent has no sibling
+    repos propose `embedded` (monorepo).
 - Repos/packages and each one's role — press for special roles (design
   authority, prototype, infra). These become the workspace map.
 - Tracker: JIRA (which project key?) or self-tracked (which ID prefix?).
@@ -62,6 +68,19 @@ The plugin root is two directories above this skill file. `template/` and
 - AGENTS.md (repo root): create or prepend so the file STARTS with:
   "Before non-trivial work, read <path-to-docs>/AGENTS.md (project
   briefing) and the relevant module doc under <path-to-docs>/04-modules/."
+- Sibling layout only — workspace-root convenience files. The workspace
+  root is NOT version-controlled, so these are machine-local and must be
+  recreated on each new machine (recreating them is idempotent — safe to
+  re-run):
+  - `<workspace>/CLAUDE.md` with the first line `@docs/AGENTS.md`, so a
+    session opened at the workspace root still loads the briefing.
+  - `<workspace>/AGENTS.md`: the same 3-line pointer, targeting
+    `docs/AGENTS.md`, for Codex sessions opened at the root.
+  - `<workspace>/.codex/hooks.json` from the template with
+    `{{HOOKS_DIR}}` → `docs/07-meta/hooks`.
+  Skip all three in embedded mode (the repo root already covers it), and
+  record a short "New machine setup" note in `02-workspace/repos.md`
+  listing them, so the docs repo itself documents how to restore them.
 
 ## 5. Finish
 
