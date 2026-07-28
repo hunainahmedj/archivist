@@ -104,18 +104,21 @@ test_sibling_docs_touched_allows() {
   teardown
 }
 
-test_missing_docs_repo_warns_once() {
+test_missing_docs_repo_blocks_once_per_session() {
   setup
   mkdir -p "$SANDBOX/ws"; mkrepo "$SANDBOX/ws/backend"
   printf '@../docs/AGENTS.md\n' > "$SANDBOX/ws/backend/CLAUDE.md"
   sid="warn-$RANDOM"
   out="$(run_gate "$SANDBOX/ws/backend" "" "$sid" 2>/dev/null)"
-  check "missing sibling docs repo -> allow" 0 $?
-  printf '%s' "$out" | grep -q "Docs repo missing"
-  check "missing docs repo -> warns" 0 $?
+  check "missing sibling docs repo -> block first call" 3 $?
+  printf '%s' "$out" | grep -q "not cloned"
+  check "missing docs repo message mentions not cloned" 0 $?
+  printf '%s' "$out" | grep -q "git clone"
+  check "missing docs repo message mentions git clone" 0 $?
   out2="$(run_gate "$SANDBOX/ws/backend" "" "$sid" 2>/dev/null)"
+  check "missing docs repo -> allow second call, same session" 0 $?
   [ -z "$out2" ]
-  check "warning fires once per session" 0 $?
+  check "no repeat message on second call" 0 $?
   teardown
 }
 
@@ -184,6 +187,62 @@ test_codex_session_start_injects_briefing() {
   teardown
 }
 
+CLAUDE_SESSION_START="$HERE/../hooks/claude-session-start.sh"
+
+test_claude_session_start_notices_missing_docs() {
+  setup
+  mkdir -p "$SANDBOX/ws"; mkrepo "$SANDBOX/ws/backend"
+  printf '@../docs/AGENTS.md\n' > "$SANDBOX/ws/backend/CLAUDE.md"
+  out="$(cd "$SANDBOX/ws/backend" && bash "$CLAUDE_SESSION_START" 2>/dev/null)"
+  printf '%s' "$out" | grep -q "not cloned"
+  check "claude session-start: notices missing docs repo" 0 $?
+  teardown
+}
+
+test_claude_session_start_silent_when_healthy() {
+  setup; sibling_ws
+  out="$(cd "$SANDBOX/ws/backend" && bash "$CLAUDE_SESSION_START" 2>/dev/null)"
+  [ -z "$out" ]
+  check "claude session-start: silent when docs repo present" 0 $?
+  teardown
+}
+
+test_claude_session_start_silent_when_not_archivist() {
+  setup; mkrepo "$SANDBOX/plain"
+  out="$(cd "$SANDBOX/plain" && bash "$CLAUDE_SESSION_START" 2>/dev/null)"
+  [ -z "$out" ]
+  check "claude session-start: silent in non-archivist dir" 0 $?
+  teardown
+}
+
+vendored_cursor() {  # mirrors what /docs-init installs
+  mkdir -p "$SANDBOX/vendored-cursor"
+  cp "$HERE/../hooks/doc-gate.sh" "$HERE/../hooks/cursor/cursor-stop.sh" "$SANDBOX/vendored-cursor/"
+}
+
+test_cursor_adapter_prints_checklist_but_exits_0() {
+  setup; embedded_ws; vendored_cursor
+  echo "x" > "$SANDBOX/ws/web/app.ts"
+  out="$(printf '{"cwd":"%s","conversation_id":"c1"}' "$SANDBOX/ws/web" \
+    | bash "$SANDBOX/vendored-cursor/cursor-stop.sh" 2>&1)"
+  code=$?
+  check "cursor adapter (vendored): block condition -> exit 0" 0 $code
+  printf '%s' "$out" | grep -q "documentation-guide.md"
+  check "cursor adapter: prints doc-gate checklist" 0 $?
+  teardown
+}
+
+CODEX_TEMPLATE="$HERE/../hooks/codex/hooks.json.template"
+
+test_codex_template_valid_json_after_substitution() {
+  python3 -c "
+import json
+t = open('$CODEX_TEMPLATE').read().replace('{{HOOKS_DIR}}', '../docs/07-meta/hooks')
+json.loads(t)
+"
+  check "guarded codex template parses as JSON after substitution" 0 $?
+}
+
 test_no_config_allows
 test_embedded_code_change_blocks
 test_embedded_code_plus_docs_allows
@@ -192,13 +251,18 @@ test_no_changes_allows
 test_stop_active_allows
 test_sibling_code_change_blocks
 test_sibling_docs_touched_allows
-test_missing_docs_repo_warns_once
+test_missing_docs_repo_blocks_once_per_session
 test_block_message_names_docs_root
 test_claude_adapter_blocks_with_exit_2
 test_claude_adapter_allows
 test_claude_adapter_respects_stop_active
 test_codex_adapter_blocks_alt_fields
 test_codex_session_start_injects_briefing
+test_claude_session_start_notices_missing_docs
+test_claude_session_start_silent_when_healthy
+test_claude_session_start_silent_when_not_archivist
+test_cursor_adapter_prints_checklist_but_exits_0
+test_codex_template_valid_json_after_substitution
 
 echo "---"
 echo "pass=$PASS fail=$FAIL"

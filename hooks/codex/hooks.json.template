@@ -3,14 +3,14 @@
     "SessionStart": [
       {
         "hooks": [
-          { "type": "command", "command": "bash {{HOOKS_DIR}}/codex-session-start.sh" }
+          { "type": "command", "command": "bash -c 'p=\"{{HOOKS_DIR}}/codex-session-start.sh\"; [ -f \"$p\" ] || exit 0; exec bash \"$p\"'" }
         ]
       }
     ],
     "Stop": [
       {
         "hooks": [
-          { "type": "command", "command": "bash {{HOOKS_DIR}}/codex-stop.sh" }
+          { "type": "command", "command": "bash -c 'p=\"{{HOOKS_DIR}}/codex-stop.sh\"; [ -f \"$p\" ] || exit 0; exec bash \"$p\"'" }
         ]
       }
     ]

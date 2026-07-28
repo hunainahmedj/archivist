@@ -49,13 +49,17 @@ The plugin root is two directories above this skill file. `template/` and
 
 - `mkdir -p <docs>/07-meta/hooks`
 - Copy from the plugin: `hooks/doc-gate.sh`,
-  `hooks/codex/codex-stop.sh`, `hooks/codex/codex-session-start.sh`
-  into `<docs>/07-meta/hooks/` (flat). `chmod +x` all three.
+  `hooks/codex/codex-stop.sh`, `hooks/codex/codex-session-start.sh`,
+  `hooks/cursor/cursor-stop.sh` into `<docs>/07-meta/hooks/` (flat).
+  `chmod +x` all four.
 - For each code repo, write `.codex/hooks.json` from
   `hooks/codex/hooks.json.template`, substituting `{{HOOKS_DIR}}` with
   the relative path from the repo root to `<docs>/07-meta/hooks`
   (sibling: `../docs/07-meta/hooks`; embedded: `docs/07-meta/hooks`).
   If the file already exists, merge — do not clobber.
+- Same for each code repo's `.cursor/hooks.json`, written from
+  `hooks/cursor/hooks.json.template` with the same `{{HOOKS_DIR}}`
+  substitution. If the file already exists, merge — do not clobber.
 
 ## 4. Wire briefing loading per code repo
 
@@ -68,6 +72,19 @@ The plugin root is two directories above this skill file. `template/` and
 - AGENTS.md (repo root): create or prepend so the file STARTS with:
   "Before non-trivial work, read <path-to-docs>/AGENTS.md (project
   briefing) and the relevant module doc under <path-to-docs>/04-modules/."
+  Sibling layout, when the repo has a remote configured (`git remote
+  get-url origin` on the docs repo): also include a line
+  `Docs repo: <remote URL> (clone as sibling docs/)` — this is what lets
+  a teammate with a partial clone (code repo only, no docs/) find the URL
+  and clone it themselves. If there is no remote, omit the line.
+- Per code repo: write `.cursor/rules/archivist-docs.mdc` with
+  frontmatter `description: Archivist documentation discipline` /
+  `alwaysApply: true` and body: "This project uses the archivist docs
+  system (docs tree: <path-to-docs>). After changing code, before
+  finishing: map each change to its doc home (module docs 04-modules/,
+  ADRs 05-decisions/, changelog 07-meta/changelog.md) per
+  <path-to-docs>/07-meta/documentation-guide.md and update those docs —
+  or state explicitly: 'No docs needed because <reason>'."
 - Sibling layout only — workspace-root convenience files. The workspace
   root is NOT version-controlled, so these are machine-local and must be
   recreated on each new machine (recreating them is idempotent — safe to

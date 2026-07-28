@@ -25,13 +25,22 @@ done
 if [ -z "$config" ]; then
   # Sibling workspace whose docs repo was never cloned on this machine:
   # CLAUDE.md imports ../docs/AGENTS.md but the directory is absent.
-  # Warn once per session, never block.
+  # Ask once per session (block), then stay silent for the rest of it.
   if grep -qs '@\.\./docs/AGENTS\.md' "$top/CLAUDE.md" && [ ! -d "$top/../docs" ]; then
     marker="${TMPDIR:-/tmp}/archivist-warned-${ARCHIVIST_SESSION_ID:-$PPID}"
-    if [ ! -f "$marker" ]; then
-      touch "$marker"
-      echo "[archivist] Docs repo missing: this workspace expects a sibling docs/ repo (CLAUDE.md imports ../docs/AGENTS.md). Clone it to restore project context and doc gating."
+    if [ -f "$marker" ]; then
+      exit 0
     fi
+    touch "$marker"
+    ws_parent="$(cd "$top/.." && pwd)"
+    cat <<MSG
+[archivist] This workspace's docs repo is not cloned: CLAUDE.md imports ../docs/AGENTS.md but ../docs does not exist.
+Offer the user to clone it now:
+  1. Find the URL: look for a "Docs repo:" line in this repo's AGENTS.md; if absent, ask the user for it.
+  2. If they accept: git clone <url> "$ws_parent/docs" -- then re-read ../docs/AGENTS.md for project context.
+  3. If they decline: finish normally; mention docs updates cannot be gated without it.
+MSG
+    exit 3
   fi
   exit 0
 fi

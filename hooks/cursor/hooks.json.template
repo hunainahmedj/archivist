@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "hooks": {
+    "stop": [
+      { "command": "bash -c 'p=\"{{HOOKS_DIR}}/cursor-stop.sh\"; [ -f \"$p\" ] || exit 0; exec bash \"$p\"'" }
+    ]
+  }
+}
