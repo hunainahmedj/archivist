@@ -89,6 +89,7 @@ The core (`hooks/doc-gate.sh`) is dependency-free bash 3.2 + python3 stdlib, exi
 
 **Known tuning candidates** (deliberate deferrals pending real-world friction — contributions welcome):
 
+- The gate re-asks at every turn end while known-undocumented WIP sits in the tree — a "No docs needed" answer only holds within one turn. Candidate: persist the verdict per session, keyed on session id + a fingerprint of the changed-file set, invalidated when the set changes. (Observed in live use, 2026-07-29.)
 - Allow-path warnings print to stdout and are barely visible in Claude transcript mode — candidate: `systemMessage` JSON output.
 - Git-porcelain-quoted paths (spaces/special chars) bypass the code-extension regex anchor.
 - Warn-once marker files in `$TMPDIR` are never cleaned up.
