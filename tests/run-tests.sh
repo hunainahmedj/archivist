@@ -131,6 +131,49 @@ test_block_message_names_docs_root() {
   teardown
 }
 
+test_verdict_persists_same_changes() {
+  setup; embedded_ws
+  echo "x" > "$SANDBOX/ws/web/app.ts"
+  run_gate "$SANDBOX/ws/web" "" "A" >/dev/null 2>&1
+  check "verdict: first block for change-set" 3 $?
+  run_gate "$SANDBOX/ws/web" "" "A" >/dev/null 2>&1
+  check "verdict: same session + same changes -> silent allow" 0 $?
+  teardown
+}
+
+test_verdict_invalidated_by_new_changes() {
+  setup; embedded_ws
+  echo "x" > "$SANDBOX/ws/web/app.ts"
+  run_gate "$SANDBOX/ws/web" "" "A" >/dev/null 2>&1
+  check "verdict: first block for change-set" 3 $?
+  run_gate "$SANDBOX/ws/web" "" "A" >/dev/null 2>&1
+  check "verdict: rerun same changes -> silent allow" 0 $?
+  echo "y" > "$SANDBOX/ws/web/other.ts"
+  run_gate "$SANDBOX/ws/web" "" "A" >/dev/null 2>&1
+  check "verdict: new file added to change-set -> block again" 3 $?
+  teardown
+}
+
+test_verdict_is_per_session() {
+  setup; embedded_ws
+  echo "x" > "$SANDBOX/ws/web/app.ts"
+  run_gate "$SANDBOX/ws/web" "" "A" >/dev/null 2>&1
+  check "verdict: session A blocks" 3 $?
+  run_gate "$SANDBOX/ws/web" "" "B" >/dev/null 2>&1
+  check "verdict: different session, same changes -> blocks again" 3 $?
+  teardown
+}
+
+test_verdict_sibling_layout() {
+  setup; sibling_ws
+  echo "x" > "$SANDBOX/ws/backend/api.ts"
+  run_gate "$SANDBOX/ws/backend" "" "C" >/dev/null 2>&1
+  check "verdict (sibling): first block for change-set" 3 $?
+  run_gate "$SANDBOX/ws/backend" "" "C" >/dev/null 2>&1
+  check "verdict (sibling): same session + same changes -> silent allow" 0 $?
+  teardown
+}
+
 ADAPTER="$HERE/../hooks/claude-stop.sh"
 CODEX_START="$HERE/../hooks/codex/codex-session-start.sh"
 
@@ -251,6 +294,10 @@ test_no_changes_allows
 test_stop_active_allows
 test_sibling_code_change_blocks
 test_sibling_docs_touched_allows
+test_verdict_persists_same_changes
+test_verdict_invalidated_by_new_changes
+test_verdict_is_per_session
+test_verdict_sibling_layout
 test_missing_docs_repo_blocks_once_per_session
 test_block_message_names_docs_root
 test_claude_adapter_blocks_with_exit_2

@@ -72,25 +72,57 @@ changed_in() {  # list changed paths (staged+unstaged+untracked) in repo $1
 # Working-tree scope is by design: sessions that already committed their
 # changes pass here; /docs-audit is the backstop for committed-but-undocumented
 # work (spec 6.2/6.4).
-code_changed=0
+# code_files is the single source of truth the counts are derived from, and
+# it's what the block branch below fingerprints for the once-per-change-set
+# verdict marker.
+code_files=""
 docs_changed=0
 
 if [ "$layout" = "embedded" ]; then
   all="$(changed_in "$ws")"
-  code_changed=$(printf '%s\n' "$all" | grep -v '^docs/' | grep -cE "$CODE_RE")
+  # Absolute paths: makes the fingerprint below stable and workspace-unique
+  # (two different projects' "web/app.ts" can never collide).
+  code_files="$(printf '%s\n' "$all" | grep -v '^docs/' | grep -E "$CODE_RE" | sed "s#^#${ws}/#")"
   docs_changed=$(printf '%s\n' "$all" | grep -c '^docs/')
 else
   while IFS= read -r repo; do
     [ -n "$repo" ] && [ -d "$ws/$repo" ] || continue
-    n=$(changed_in "$ws/$repo" | grep -cE "$CODE_RE")
-    code_changed=$((code_changed + n))
+    # Prefix with the repo's absolute path so identical filenames in
+    # different repos (e.g. backend/index.ts vs frontend/index.ts) -- or in
+    # different workspaces entirely -- can't collide in the list.
+    repo_files="$(changed_in "$ws/$repo" | grep -E "$CODE_RE" | sed "s#^#${ws}/${repo}/#")"
+    if [ -n "$repo_files" ]; then
+      if [ -n "$code_files" ]; then
+        code_files="$code_files
+$repo_files"
+      else
+        code_files="$repo_files"
+      fi
+    fi
   done <<EOF
 $(cfg repos)
 EOF
   docs_changed=$(changed_in "$docs_dir" | grep -c .)
 fi
 
+code_changed=0
+[ -n "$code_files" ] && code_changed=$(printf '%s\n' "$code_files" | grep -c .)
+
 if [ "$code_changed" -gt 0 ] && [ "$docs_changed" -eq 0 ]; then
+  # Once per (session, change-set): the agent's "No docs needed because X"
+  # answer in an earlier turn isn't observable by the hook — it only sees the
+  # working tree, not the transcript — so we can't tell the checklist was
+  # already walked for this exact set of files. Instead, write a verdict
+  # marker the first time we block for a given fingerprint of the sorted
+  # changed-code-file list; an identical rerun (same session, same files)
+  # exits silently. Any file entering or leaving the set changes the
+  # fingerprint and re-triggers the ask.
+  fp=$(printf '%s\n' "$code_files" | sort | cksum | cut -d' ' -f1)
+  marker="${TMPDIR:-/tmp}/archivist-verdict-${ARCHIVIST_SESSION_ID:-$PPID}-${fp}"
+  if [ -f "$marker" ]; then
+    exit 0
+  fi
+  touch "$marker"
   cat <<MSG
 [archivist] Code changed this session but documentation did not.
 Before finishing, walk the checklist:
@@ -101,6 +133,7 @@ Before finishing, walk the checklist:
   3. Update those docs following $docs_dir/07-meta/documentation-guide.md,
      or state explicitly: "No docs needed because <reason>".
 Docs root: $docs_dir
+(This checklist will not repeat for these same changes in this session; it will fire again if the changed-file set changes.)
 MSG
   exit 3
 fi

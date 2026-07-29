@@ -66,7 +66,7 @@ Both choices live in `.archivist.json` and every tool reads them from there.
 
 ## How the gate works
 
-On session end, the hook discovers the project's docs tree (fast no-op exit for projects that don't use archivist), runs `git status` across the project's repos, and — if code files changed while the docs tree didn't — blocks the stop and hands the agent a checklist: *map each change to its doc home, update it, or state "No docs needed because …"*. The escape hatch is deliberate: the gate forces the **decision** to be explicit, not the paperwork. Loop protection guarantees it never fires twice in one turn, and `/docs-audit` is the backstop for whatever slips through (committed work, hookless tools, humans).
+On session end, the hook discovers the project's docs tree (fast no-op exit for projects that don't use archivist), runs `git status` across the project's repos, and — if code files changed while the docs tree didn't — blocks the stop and hands the agent a checklist: *map each change to its doc home, update it, or state "No docs needed because …"*. The escape hatch is deliberate: the gate forces the **decision** to be explicit, not the paperwork. Loop protection guarantees it never fires twice in one turn, and `/docs-audit` is the backstop for whatever slips through (committed work, hookless tools, humans). The checklist itself fires once per session per change-set — a repeat stop with the identical files stays silent, and new changes entering the set re-trigger it.
 
 Claude Code uses the plugin's Stop hook. For Codex, `/docs-init` vendors the same core script plus adapters into `07-meta/hooks/` — inside the docs repo, so enforcement travels with `git clone`, no plugin install needed — and a `SessionStart` hook injects `AGENTS.md` into Codex sessions, emulating Claude's `@import`.
 
@@ -89,7 +89,6 @@ The core (`hooks/doc-gate.sh`) is dependency-free bash 3.2 + python3 stdlib, exi
 
 **Known tuning candidates** (deliberate deferrals pending real-world friction — contributions welcome):
 
-- The gate re-asks at every turn end while known-undocumented WIP sits in the tree — a "No docs needed" answer only holds within one turn. Candidate: persist the verdict per session, keyed on session id + a fingerprint of the changed-file set, invalidated when the set changes. (Observed in live use, 2026-07-29.)
 - Allow-path warnings print to stdout and are barely visible in Claude transcript mode — candidate: `systemMessage` JSON output.
 - Git-porcelain-quoted paths (spaces/special chars) bypass the code-extension regex anchor.
 - Warn-once marker files in `$TMPDIR` are never cleaned up.
