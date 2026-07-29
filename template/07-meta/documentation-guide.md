@@ -21,6 +21,14 @@ Every fact has exactly one home. Everywhere else links to it. Homes:
 | Why a choice was made | 05-decisions/ (ADR) |
 | People, ownership, process | 06-admin/ |
 | Doc process, changelog, audits | 07-meta/ |
+| Feature specs & implementation plans (working documents) | code-adjacent, in the repo where the work happens (e.g. `<repo>/docs/specs/`, `<repo>/docs/plans/`) — NOT this tree |
+
+Working documents (specs, plans) describe work being done, not how the
+product is. They stay in the repo whose code they drive, following that
+repo's convention. When the work ships, its durable outcome graduates
+here: behavior into the module doc, significant choices into an ADR —
+which may link back to the spec for history. Never migrate or stub spec
+and plan files.
 
 ## Volatility rule
 
