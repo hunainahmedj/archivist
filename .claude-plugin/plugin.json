@@ -1,5 +1,5 @@
 {
   "name": "archivist",
-  "version": "0.2.1",
-  "description": "Documentation system: docs-repo template, session-end doc gate (Claude + Codex), /docs-init scaffolding, /docs-audit sync checks, and a canonical doc-writing rulebook"
+  "version": "0.3.0",
+  "description": "Documentation system: docs-repo template, session-end doc gate (Claude + Codex), /archivist-init scaffolding, /archivist-audit sync checks, and a canonical doc-writing rulebook"
 }

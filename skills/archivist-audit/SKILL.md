@@ -1,9 +1,9 @@
 ---
-name: docs-audit
+name: archivist-audit
 description: Audit documentation sync for an archivist project — diff git history across all repos against the docs tree, report undocumented changes, stale docs, and missing ADRs, then offer to fix them. Run on demand or weekly.
 ---
 
-# /docs-audit
+# /archivist-audit
 
 ## 1. Locate and load
 
@@ -58,5 +58,5 @@ Write `07-meta/audits/YYYY-MM-DD.md`:
 ## 6. Offer to fix
 
 Ask the user which items to fix now. For each accepted item, invoke the
-documenting skill and make the edit; check the box in the report.
+archivist-documenting skill and make the edit; check the box in the report.
 Append the audit run to `07-meta/changelog.md`. Commit the docs tree.

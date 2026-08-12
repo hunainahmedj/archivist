@@ -8,7 +8,7 @@ archivist fixes this with three moving parts:
 
 1. **A standard docs tree** per project — deep module docs, append-only decision records (ADRs), admin/ownership info, and an `AGENTS.md` briefing that loads into every agent session. Structured so a non-technical reader can navigate it, and an agent can maintain it.
 2. **A session-end doc gate** — a deterministic hook (Claude Code *and* Codex) that blocks an agent from finishing a session in which code changed but documentation didn't. The agent either updates the docs while the context is still in its head, or states explicitly why none are needed.
-3. **A backward audit** — `/docs-audit` walks git history across all of a project's repos, clusters commits into work units, and reports undocumented changes, stale docs, and missing ADRs as a dated, checkboxed punch list.
+3. **A backward audit** — `/archivist-audit` walks git history across all of a project's repos, clusters commits into work units, and reports undocumented changes, stale docs, and missing ADRs as a dated, checkboxed punch list.
 
 The knowledge lives in plain Markdown in git. Only the enforcement is per-tool — a thin adapter per agent. A new tool tomorrow needs one new adapter, nothing else.
 
@@ -24,8 +24,8 @@ Or clone and add the local path. Requires: bash, git, python3 (stdlib only — n
 ## Using with Codex and OpenCode
 
 Claude Code loads archivist as a plugin. OpenCode and Codex don't have a
-plugin system, so they get the same skills (`docs-init`, `docs-audit`,
-`documenting`) through a small cross-tool installer instead — the same
+plugin system, so they get the same skills (`archivist-init`, `archivist-audit`,
+`archivist-documenting`) through a small cross-tool installer instead — the same
 skill files, just symlinked into each tool's catalog rather than loaded
 through a plugin.
 
@@ -45,11 +45,11 @@ through a plugin.
   `~/.claude/skills` is left alone by default (see below).
 
 - **Project briefing**: both tools pick up the project's `AGENTS.md`
-  pointer automatically — no extra wiring beyond what `/docs-init` already
+  pointer automatically — no extra wiring beyond what `/archivist-init` already
   writes into each repo.
 
 - **Session-end doc gate**: for Codex, this comes from the project's own
-  vendored hooks — `/docs-init` writes `<docs>/07-meta/hooks/` and each
+  vendored hooks — `/archivist-init` writes `<docs>/07-meta/hooks/` and each
   repo's `.codex/hooks.json` for you, so enforcement travels with `git
   clone` and needs no global install. There's no OpenCode gate adapter
   yet — PRs welcome.
@@ -70,10 +70,10 @@ hook that enforces the doc gate, which is the plugin's job.
 From your project's workspace root:
 
 ```
-/docs-init
+/archivist-init
 ```
 
-It interviews you (layout, repos and their roles, tracker, team), scaffolds the docs tree from the template, vendors the Codex hooks, and wires each repo's `CLAUDE.md` / `AGENTS.md` to load the briefing. From then on, the gate and `/docs-audit` keep the tree alive.
+It interviews you (layout, repos and their roles, tracker, team), scaffolds the docs tree from the template, vendors the Codex hooks, and wires each repo's `CLAUDE.md` / `AGENTS.md` to load the briefing. From then on, the gate and `/archivist-audit` keep the tree alive.
 
 ## The docs tree
 
@@ -110,17 +110,17 @@ Both choices live in `.archivist.json` and every tool reads them from there.
 
 ## How the gate works
 
-On session end, the hook discovers the project's docs tree (fast no-op exit for projects that don't use archivist), runs `git status` across the project's repos, and — if code files changed while the docs tree didn't — blocks the stop and hands the agent a checklist: *map each change to its doc home, update it, or state "No docs needed because …"*. The escape hatch is deliberate: the gate forces the **decision** to be explicit, not the paperwork. Loop protection guarantees it never fires twice in one turn, and `/docs-audit` is the backstop for whatever slips through (committed work, hookless tools, humans). The checklist itself fires once per session per change-set — a repeat stop with the identical files stays silent, and new changes entering the set re-trigger it.
+On session end, the hook discovers the project's docs tree (fast no-op exit for projects that don't use archivist), runs `git status` across the project's repos, and — if code files changed while the docs tree didn't — blocks the stop and hands the agent a checklist: *map each change to its doc home, update it, or state "No docs needed because …"*. The escape hatch is deliberate: the gate forces the **decision** to be explicit, not the paperwork. Loop protection guarantees it never fires twice in one turn, and `/archivist-audit` is the backstop for whatever slips through (committed work, hookless tools, humans). The checklist itself fires once per session per change-set — a repeat stop with the identical files stays silent, and new changes entering the set re-trigger it.
 
-Claude Code uses the plugin's Stop hook. For Codex, `/docs-init` vendors the same core script plus adapters into `07-meta/hooks/` — inside the docs repo, so enforcement travels with `git clone`, no plugin install needed — and a `SessionStart` hook injects `AGENTS.md` into Codex sessions, emulating Claude's `@import`.
+Claude Code uses the plugin's Stop hook. For Codex, `/archivist-init` vendors the same core script plus adapters into `07-meta/hooks/` — inside the docs repo, so enforcement travels with `git clone`, no plugin install needed — and a `SessionStart` hook injects `AGENTS.md` into Codex sessions, emulating Claude's `@import`.
 
 ## Rolling out to a new project
 
 1. Install the plugin (once per machine).
-2. Run `/docs-init` from the project workspace root — review the `CLAUDE.md` diffs it shows before accepting.
+2. Run `/archivist-init` from the project workspace root — review the `CLAUDE.md` diffs it shows before accepting.
 3. Migrate existing narrative docs into `04-modules/` module-by-module (merge multi-repo views; old files become pointer stubs; run a link check after).
 4. Backfill `06-admin/` (team/ownership/processes from git + human input) and retroactive ADRs — only for decisions that still generate questions.
-5. Run the first `/docs-audit` (baseline) and work its punch list.
+5. Run the first `/archivist-audit` (baseline) and work its punch list.
 6. Soak a couple of weeks; tune the gate only on real friction (path excludes etc.).
 
 ## Development

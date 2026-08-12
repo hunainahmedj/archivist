@@ -1,7 +1,7 @@
 # Documentation guide (the rulebook)
 
 Rules for every human and agent writing docs in this tree. The doc gate
-and /docs-audit assume these rules; tools load this file before writing.
+and /archivist-audit assume these rules; tools load this file before writing.
 
 ## Single-home rule
 
@@ -85,4 +85,4 @@ Self-tracked mode: prune `## Done` in the backlog quarterly into
 Answering the doc gate with "No docs needed because <reason>" is
 legitimate for: pure refactors without behavior change, dependency bumps,
 tooling/config tweaks, and work-in-progress not yet coherent enough to
-document. /docs-audit is the safety net for wrong calls.
+document. /archivist-audit is the safety net for wrong calls.

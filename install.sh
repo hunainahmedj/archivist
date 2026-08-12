@@ -1,8 +1,9 @@
 #!/bin/bash
 # archivist cross-tool installer.
 #
-# Installs the archivist skills (docs-init, docs-audit, documenting) so
-# they're usable from OpenCode and Codex, cmux-style: the skill tree is
+# Installs the archivist skills (archivist-init, archivist-audit,
+# archivist-documenting) so they're usable from OpenCode and Codex,
+# cmux-style: the skill tree is
 # synced to ~/.archivist, and each catalog gets a REAL directory per skill
 # containing a symlinked SKILL.md. Real directories because some tools'
 # skill scanners enumerate directories without following directory
@@ -24,7 +25,11 @@
 #   bash install.sh --uninstall      remove symlinks this installer created
 set -u
 
-SKILLS="docs-init docs-audit documenting"
+SKILLS="archivist-init archivist-audit archivist-documenting"
+# Pre-v0.3.0 skill names. Swept out of every catalog on both install and
+# --uninstall so upgrading doesn't leave orphaned entries behind -- but
+# ONLY when the entry is one of our own artifacts (see remove_if_ours).
+LEGACY_SKILLS="docs-init docs-audit documenting"
 TARGET="$HOME/.archivist"
 
 UNINSTALL=0
@@ -58,6 +63,50 @@ opencode_catalog="$HOME/.config/opencode/skills"
 codex_catalog="$HOME/.codex/skills"
 claude_catalog="$HOME/.claude/skills"
 
+# Remove $catalog/$skill if -- and only if -- it is one of our own
+# artifacts: either the current real-dir layout (a real directory whose
+# SKILL.md is a symlink resolving into $target_real), or the legacy
+# v0.2.0 layout (the entry itself is a symlink resolving into
+# $target_real). Anything else (a real user directory/file occupying the
+# name) is left strictly alone. Echoes the removed path and returns 0 if
+# something was removed; returns 1 otherwise.
+remove_if_ours() {  # $1=catalog $2=skill $3=target_real
+  entry="$1/$2"
+  if [ -d "$entry" ] && [ -L "$entry/SKILL.md" ]; then
+    resolved="$(realpath_py "$entry/SKILL.md" 2>/dev/null)"
+    case "$resolved" in
+      "$3"/*)
+        rm -f "$entry/SKILL.md"
+        rmdir "$entry" 2>/dev/null || true
+        echo "$entry"
+        return 0
+        ;;
+    esac
+  elif [ -L "$entry" ]; then
+    resolved="$(realpath_py "$entry" 2>/dev/null)"
+    case "$resolved" in
+      "$3"/*)
+        rm -f "$entry"
+        echo "$entry"
+        return 0
+        ;;
+    esac
+  fi
+  return 1
+}
+
+# Resolve $TARGET the same way do_uninstall/migrate_legacy need it: on
+# macOS $HOME can sit under a path that is itself a symlink (e.g. /var ->
+# /private/var in temp dirs), so comparing a realpath'd link target
+# against the raw $TARGET string can miss.
+target_realpath() {
+  if [ -e "$TARGET" ]; then
+    realpath_py "$TARGET" 2>/dev/null || echo "$TARGET"
+  else
+    echo "$TARGET"
+  fi
+}
+
 # Catalogs to receive symlinks on install. Uninstall always sweeps all
 # three (see do_uninstall) since a prior run may have used --claude-skills
 # even if this invocation didn't.
@@ -71,38 +120,12 @@ install_catalogs() {
 
 do_uninstall() {
   removed=0
-  # Resolve TARGET through the same real-path logic used for the symlinks
-  # themselves -- on macOS, $HOME can sit under a path that is itself a
-  # symlink (e.g. /var -> /private/var in temp dirs), so comparing a
-  # realpath'd link target against the raw $TARGET string can miss.
-  target_real="$TARGET"
-  if [ -e "$TARGET" ]; then
-    target_real="$(realpath_py "$TARGET" 2>/dev/null || echo "$TARGET")"
-  fi
+  target_real="$(target_realpath)"
   for catalog in "$opencode_catalog" "$codex_catalog" "$claude_catalog"; do
-    for skill in $SKILLS; do
-      entry="$catalog/$skill"
-      # Current layout: real dir containing a symlinked SKILL.md.
-      if [ -d "$entry" ] && [ -L "$entry/SKILL.md" ]; then
-        resolved="$(realpath_py "$entry/SKILL.md" 2>/dev/null)"
-        case "$resolved" in
-          "$target_real"/*)
-            rm -f "$entry/SKILL.md"
-            rmdir "$entry" 2>/dev/null || true
-            removed=$((removed + 1))
-            echo "removed: $entry"
-            ;;
-        esac
-      # Legacy layout (v0.2.0): the skill dir itself was a symlink.
-      elif [ -L "$entry" ]; then
-        resolved="$(realpath_py "$entry" 2>/dev/null)"
-        case "$resolved" in
-          "$target_real"/*)
-            rm -f "$entry"
-            removed=$((removed + 1))
-            echo "removed: $entry"
-            ;;
-        esac
+    for skill in $SKILLS $LEGACY_SKILLS; do
+      if entry="$(remove_if_ours "$catalog" "$skill" "$target_real")"; then
+        removed=$((removed + 1))
+        echo "removed: $entry"
       fi
     done
   done
@@ -129,6 +152,24 @@ if [ "$SRC" != "$TARGET" ]; then
     fi
   done
 fi
+
+# --- Migrate away pre-v0.3.0 skill names ------------------------------
+# Sweep all three catalogs (not just the ones this invocation is
+# installing into) since a prior run may have used --claude-skills even
+# if this one didn't -- same reasoning as install_catalogs() above.
+# remove_if_ours only touches entries that resolve into our own tree, so
+# a user's unrelated skill happening to share a legacy name is untouched.
+migrated=""
+target_real="$(target_realpath)"
+for catalog in "$opencode_catalog" "$codex_catalog" "$claude_catalog"; do
+  [ -d "$catalog" ] || continue
+  for skill in $LEGACY_SKILLS; do
+    if entry="$(remove_if_ours "$catalog" "$skill" "$target_real")"; then
+      migrated="$migrated
+  $entry"
+    fi
+  done
+done
 
 # --- Symlink each skill into each catalog -----------------------------
 warnings=""
@@ -169,6 +210,11 @@ done
 # --- Summary ------------------------------------------------------------
 echo "archivist installed to: $TARGET"
 echo
+if [ -n "$migrated" ]; then
+  echo "Migrated pre-v0.3.0 skill entries (removed):"
+  printf '%s\n' "$migrated"
+  echo
+fi
 echo "Skills linked:"
 printf '%s\n' "$summary_lines"
 if [ -n "$warnings" ]; then
@@ -193,7 +239,7 @@ else
 fi
 echo
 echo "Session-end doc gate: enforced per-project, not by this installer."
-echo "Run docs-init in a project to vendor it -- it writes the gate script"
+echo "Run archivist-init in a project to vendor it -- it writes the gate script"
 echo "into <docs>/07-meta/hooks and wires .codex/hooks.json for Codex."
 echo "OpenCode gate adapter: not built yet -- PRs welcome."
 echo

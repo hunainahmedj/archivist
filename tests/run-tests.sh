@@ -181,7 +181,7 @@ claude_payload() {  # $1=cwd $2=stop_hook_active(json bool)
   printf '{"session_id":"s-test","transcript_path":"/tmp/t","cwd":"%s","stop_hook_active":%s}' "$1" "$2"
 }
 
-vendored_hooks() {  # mirrors what /docs-init installs
+vendored_hooks() {  # mirrors what /archivist-init installs
   mkdir -p "$SANDBOX/vendored"
   cp "$HERE/../hooks/doc-gate.sh" "$HERE/../hooks/codex/codex-stop.sh" "$SANDBOX/vendored/"
 }
@@ -258,7 +258,7 @@ test_claude_session_start_silent_when_not_archivist() {
   teardown
 }
 
-vendored_cursor() {  # mirrors what /docs-init installs
+vendored_cursor() {  # mirrors what /archivist-init installs
   mkdir -p "$SANDBOX/vendored-cursor"
   cp "$HERE/../hooks/doc-gate.sh" "$HERE/../hooks/cursor/cursor-stop.sh" "$SANDBOX/vendored-cursor/"
 }
@@ -294,37 +294,37 @@ test_install_sh_creates_catalogs() {
   HOME="$SANDBOX/home" bash "$INSTALL_SH" >/dev/null 2>&1
   check "install.sh: exits 0 on fresh HOME" 0 $?
 
-  test -f "$SANDBOX/home/.archivist/skills/docs-init/SKILL.md"
-  check "install.sh: ~/.archivist/skills/docs-init/SKILL.md exists" 0 $?
+  test -f "$SANDBOX/home/.archivist/skills/archivist-init/SKILL.md"
+  check "install.sh: ~/.archivist/skills/archivist-init/SKILL.md exists" 0 $?
 
-  d="$SANDBOX/home/.config/opencode/skills/docs-init"
+  d="$SANDBOX/home/.config/opencode/skills/archivist-init"
   [ -d "$d" ] && [ ! -L "$d" ]
-  check "install.sh: opencode docs-init is a REAL directory (scanners skip dir symlinks)" 0 $?
+  check "install.sh: opencode archivist-init is a REAL directory (scanners skip dir symlinks)" 0 $?
 
   test -L "$d/SKILL.md"
-  check "install.sh: opencode docs-init/SKILL.md is a symlink" 0 $?
+  check "install.sh: opencode archivist-init/SKILL.md is a symlink" 0 $?
 
   python3 -c "
 import os, sys
-p = '$SANDBOX/home/.config/opencode/skills/docs-init/SKILL.md'
+p = '$SANDBOX/home/.config/opencode/skills/archivist-init/SKILL.md'
 r = os.path.realpath(p)
 sys.exit(0 if os.path.isfile(r) and '/.archivist/' in r else 1)
 "
   check "install.sh: opencode SKILL.md realpath lands inside ~/.archivist (root resolution)" 0 $?
 
-  d="$SANDBOX/home/.codex/skills/docs-audit"
+  d="$SANDBOX/home/.codex/skills/archivist-audit"
   [ -d "$d" ] && [ ! -L "$d" ] && [ -L "$d/SKILL.md" ]
-  check "install.sh: codex docs-audit is a real dir with symlinked SKILL.md" 0 $?
+  check "install.sh: codex archivist-audit is a real dir with symlinked SKILL.md" 0 $?
 
   python3 -c "
 import os, sys
-p = '$SANDBOX/home/.codex/skills/docs-audit/SKILL.md'
+p = '$SANDBOX/home/.codex/skills/archivist-audit/SKILL.md'
 sys.exit(0 if os.path.isfile(os.path.realpath(p)) else 1)
 "
-  check "install.sh: codex docs-audit resolves to a real SKILL.md" 0 $?
+  check "install.sh: codex archivist-audit resolves to a real SKILL.md" 0 $?
 
-  [ ! -e "$SANDBOX/home/.claude/skills/docs-init" ]
-  check "install.sh: claude skills docs-init absent by default" 0 $?
+  [ ! -e "$SANDBOX/home/.claude/skills/archivist-init" ]
+  check "install.sh: claude skills archivist-init absent by default" 0 $?
   teardown
 }
 
@@ -334,21 +334,45 @@ test_install_sh_uninstall_removes_symlinks_keeps_tree() {
   HOME="$SANDBOX/home" bash "$INSTALL_SH" --uninstall >/dev/null 2>&1
   check "install.sh --uninstall: exits 0" 0 $?
 
-  [ ! -e "$SANDBOX/home/.config/opencode/skills/docs-init" ]
+  [ ! -e "$SANDBOX/home/.config/opencode/skills/archivist-init" ]
   check "install.sh --uninstall: opencode entry removed" 0 $?
 
-  [ ! -e "$SANDBOX/home/.codex/skills/docs-audit" ]
+  [ ! -e "$SANDBOX/home/.codex/skills/archivist-audit" ]
   check "install.sh --uninstall: codex entry removed" 0 $?
 
-  # Legacy v0.2.0 layout (dir symlink) must also be cleaned up by uninstall.
+  # Legacy v0.2.0 layout (dir symlink), under a pre-v0.3.0 skill name,
+  # must also be cleaned up by uninstall.
   mkdir -p "$SANDBOX/home/.codex/skills"
-  ln -s "$SANDBOX/home/.archivist/skills/documenting" "$SANDBOX/home/.codex/skills/documenting"
+  ln -s "$SANDBOX/home/.archivist/skills/archivist-documenting" "$SANDBOX/home/.codex/skills/documenting"
   HOME="$SANDBOX/home" bash "$INSTALL_SH" --uninstall >/dev/null 2>&1
   [ ! -e "$SANDBOX/home/.codex/skills/documenting" ]
-  check "install.sh --uninstall: legacy dir-symlink layout removed too" 0 $?
+  check "install.sh --uninstall: legacy dir-symlink layout (old name) removed too" 0 $?
 
   test -d "$SANDBOX/home/.archivist"
   check "install.sh --uninstall: ~/.archivist tree still present" 0 $?
+  teardown
+}
+
+test_install_sh_migrates_legacy_named_entries() {
+  setup
+  HOME="$SANDBOX/home" bash "$INSTALL_SH" >/dev/null 2>&1
+
+  # Pre-create a legacy entry: a real dir (old skill name) with a
+  # symlinked SKILL.md into the sandbox ~/.archivist -- mirrors a
+  # pre-v0.3.0 install that a user is upgrading from.
+  legacy="$SANDBOX/home/.codex/skills/docs-init"
+  mkdir -p "$legacy"
+  ln -s "$SANDBOX/home/.archivist/skills/docs-init/SKILL.md" "$legacy/SKILL.md"
+
+  HOME="$SANDBOX/home" bash "$INSTALL_SH" >/dev/null 2>&1
+  check "install.sh: re-run with legacy entry present still exits 0" 0 $?
+
+  [ ! -e "$legacy" ]
+  check "install.sh: legacy docs-init entry migrated away" 0 $?
+
+  d="$SANDBOX/home/.codex/skills/archivist-init"
+  [ -d "$d" ] && [ -L "$d/SKILL.md" ]
+  check "install.sh: new-name archivist-init entry exists after migration" 0 $?
   teardown
 }
 
@@ -390,6 +414,7 @@ test_cursor_adapter_prints_checklist_but_exits_0
 test_codex_template_valid_json_after_substitution
 test_install_sh_creates_catalogs
 test_install_sh_uninstall_removes_symlinks_keeps_tree
+test_install_sh_migrates_legacy_named_entries
 test_skill_naming_rules
 
 echo "---"

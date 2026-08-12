@@ -1,5 +1,5 @@
 ---
-name: documenting
+name: archivist-documenting
 description: Use when writing or updating documentation in a project that has an archivist docs tree (a docs directory containing .archivist.json) — before editing any file under that tree, or when the doc gate asks for doc updates
 ---
 

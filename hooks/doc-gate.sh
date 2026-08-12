@@ -70,7 +70,7 @@ changed_in() {  # list changed paths (staged+unstaged+untracked) in repo $1
 }
 
 # Working-tree scope is by design: sessions that already committed their
-# changes pass here; /docs-audit is the backstop for committed-but-undocumented
+# changes pass here; /archivist-audit is the backstop for committed-but-undocumented
 # work (spec 6.2/6.4).
 # code_files is the single source of truth the counts are derived from, and
 # it's what the block branch below fingerprints for the once-per-change-set

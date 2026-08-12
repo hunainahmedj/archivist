@@ -1,9 +1,9 @@
 ---
-name: docs-init
+name: archivist-init
 description: Scaffold the archivist documentation system for a project — creates the docs tree from the template, configures .archivist.json, wires CLAUDE.md/AGENTS.md briefing loading and Codex hooks. Run once per project, from the workspace root (multi-repo project) or the repo root (monorepo).
 ---
 
-# /docs-init
+# /archivist-init
 
 Locate the archivist root: resolve this SKILL.md's real path (follow
 symlinks — `python3 -c 'import os,sys;print(os.path.realpath(sys.argv[1]))' <path>`);
@@ -107,4 +107,4 @@ this is `~/.archivist`; as a Claude plugin it is the plugin directory.
 - Commit the docs tree; commit each modified code repo separately.
 - Print a summary: docs root, layout, tracker mode, hooks vendored,
   repos wired, and next steps (populate 04-modules/ — suggest running
-  /docs-audit after a week).
+  /archivist-audit after a week).
