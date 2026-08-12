@@ -297,18 +297,24 @@ test_install_sh_creates_catalogs() {
   test -f "$SANDBOX/home/.archivist/skills/docs-init/SKILL.md"
   check "install.sh: ~/.archivist/skills/docs-init/SKILL.md exists" 0 $?
 
-  test -L "$SANDBOX/home/.config/opencode/skills/docs-init"
-  check "install.sh: opencode docs-init is a symlink" 0 $?
+  d="$SANDBOX/home/.config/opencode/skills/docs-init"
+  [ -d "$d" ] && [ ! -L "$d" ]
+  check "install.sh: opencode docs-init is a REAL directory (scanners skip dir symlinks)" 0 $?
+
+  test -L "$d/SKILL.md"
+  check "install.sh: opencode docs-init/SKILL.md is a symlink" 0 $?
 
   python3 -c "
 import os, sys
 p = '$SANDBOX/home/.config/opencode/skills/docs-init/SKILL.md'
-sys.exit(0 if os.path.isfile(os.path.realpath(p)) else 1)
+r = os.path.realpath(p)
+sys.exit(0 if os.path.isfile(r) and '/.archivist/' in r else 1)
 "
-  check "install.sh: opencode docs-init resolves to a real SKILL.md" 0 $?
+  check "install.sh: opencode SKILL.md realpath lands inside ~/.archivist (root resolution)" 0 $?
 
-  test -L "$SANDBOX/home/.codex/skills/docs-audit"
-  check "install.sh: codex docs-audit is a symlink" 0 $?
+  d="$SANDBOX/home/.codex/skills/docs-audit"
+  [ -d "$d" ] && [ ! -L "$d" ] && [ -L "$d/SKILL.md" ]
+  check "install.sh: codex docs-audit is a real dir with symlinked SKILL.md" 0 $?
 
   python3 -c "
 import os, sys
@@ -329,10 +335,17 @@ test_install_sh_uninstall_removes_symlinks_keeps_tree() {
   check "install.sh --uninstall: exits 0" 0 $?
 
   [ ! -e "$SANDBOX/home/.config/opencode/skills/docs-init" ]
-  check "install.sh --uninstall: opencode symlink removed" 0 $?
+  check "install.sh --uninstall: opencode entry removed" 0 $?
 
   [ ! -e "$SANDBOX/home/.codex/skills/docs-audit" ]
-  check "install.sh --uninstall: codex symlink removed" 0 $?
+  check "install.sh --uninstall: codex entry removed" 0 $?
+
+  # Legacy v0.2.0 layout (dir symlink) must also be cleaned up by uninstall.
+  mkdir -p "$SANDBOX/home/.codex/skills"
+  ln -s "$SANDBOX/home/.archivist/skills/documenting" "$SANDBOX/home/.codex/skills/documenting"
+  HOME="$SANDBOX/home" bash "$INSTALL_SH" --uninstall >/dev/null 2>&1
+  [ ! -e "$SANDBOX/home/.codex/skills/documenting" ]
+  check "install.sh --uninstall: legacy dir-symlink layout removed too" 0 $?
 
   test -d "$SANDBOX/home/.archivist"
   check "install.sh --uninstall: ~/.archivist tree still present" 0 $?

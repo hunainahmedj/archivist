@@ -3,7 +3,12 @@
 #
 # Installs the archivist skills (docs-init, docs-audit, documenting) so
 # they're usable from OpenCode and Codex, cmux-style: the skill tree is
-# synced to ~/.archivist and each catalog gets a symlink per skill.
+# synced to ~/.archivist, and each catalog gets a REAL directory per skill
+# containing a symlinked SKILL.md. Real directories because some tools'
+# skill scanners enumerate directories without following directory
+# symlinks; a symlinked file inside a real directory is read by everything.
+# The file symlink (not a copy) is what keeps the skill's real-path root
+# resolution working: realpath(SKILL.md) lands inside ~/.archivist.
 #
 # Claude Code does NOT need this script -- use the plugin instead
 # (/plugin marketplace add ...), which also carries the Stop hook that
@@ -76,14 +81,26 @@ do_uninstall() {
   fi
   for catalog in "$opencode_catalog" "$codex_catalog" "$claude_catalog"; do
     for skill in $SKILLS; do
-      link="$catalog/$skill"
-      if [ -L "$link" ]; then
-        resolved="$(realpath_py "$link" 2>/dev/null)"
+      entry="$catalog/$skill"
+      # Current layout: real dir containing a symlinked SKILL.md.
+      if [ -d "$entry" ] && [ -L "$entry/SKILL.md" ]; then
+        resolved="$(realpath_py "$entry/SKILL.md" 2>/dev/null)"
         case "$resolved" in
           "$target_real"/*)
-            rm -f "$link"
+            rm -f "$entry/SKILL.md"
+            rmdir "$entry" 2>/dev/null || true
             removed=$((removed + 1))
-            echo "removed: $link"
+            echo "removed: $entry"
+            ;;
+        esac
+      # Legacy layout (v0.2.0): the skill dir itself was a symlink.
+      elif [ -L "$entry" ]; then
+        resolved="$(realpath_py "$entry" 2>/dev/null)"
+        case "$resolved" in
+          "$target_real"/*)
+            rm -f "$entry"
+            removed=$((removed + 1))
+            echo "removed: $entry"
             ;;
         esac
       fi
@@ -121,17 +138,27 @@ for catalog in $(install_catalogs); do
   mkdir -p "$catalog"
   catalog_skills=""
   for skill in $SKILLS; do
-    link="$catalog/$skill"
-    src="$TARGET/skills/$skill"
-    if [ -L "$link" ]; then
-      rm -f "$link"
-      ln -s "$src" "$link"
-      catalog_skills="$catalog_skills $skill"
-    elif [ -e "$link" ]; then
+    entry="$catalog/$skill"
+    src="$TARGET/skills/$skill/SKILL.md"
+    if [ -L "$entry" ]; then
+      # Legacy v0.2.0 dir-symlink: upgrade to the real-dir layout.
+      rm -f "$entry"
+    fi
+    if [ -d "$entry" ]; then
+      if [ -L "$entry/SKILL.md" ] || [ ! -e "$entry/SKILL.md" ]; then
+        # Our dir (or an empty shell) -- refresh the file symlink.
+        ln -sf "$src" "$entry/SKILL.md"
+        catalog_skills="$catalog_skills $skill"
+      else
+        warnings="$warnings
+WARNING: $entry contains a real SKILL.md -- leaving it alone (not touching your data). Move it aside and re-run install.sh to link the archivist skill here."
+      fi
+    elif [ -e "$entry" ]; then
       warnings="$warnings
-WARNING: $link already exists and is not a symlink -- leaving it alone (not touching your data). Move it aside and re-run install.sh to link the archivist skill here."
+WARNING: $entry already exists and is not a directory -- leaving it alone. Move it aside and re-run install.sh."
     else
-      ln -s "$src" "$link"
+      mkdir -p "$entry"
+      ln -s "$src" "$entry/SKILL.md"
       catalog_skills="$catalog_skills $skill"
     fi
   done

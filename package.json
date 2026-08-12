@@ -1,6 +1,6 @@
 {
   "name": "archivist-docs",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Documentation system: docs-repo template, session-end doc gate (Claude + Codex), skills for Claude Code, OpenCode, and Codex",
   "bin": {
     "archivist-install": "./install.sh"
