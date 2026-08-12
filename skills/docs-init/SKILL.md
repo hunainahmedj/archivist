@@ -5,8 +5,11 @@ description: Scaffold the archivist documentation system for a project — creat
 
 # /docs-init
 
-The plugin root is two directories above this skill file. `template/` and
-`hooks/` live there.
+Locate the archivist root: resolve this SKILL.md's real path (follow
+symlinks — `python3 -c 'import os,sys;print(os.path.realpath(sys.argv[1]))' <path>`);
+the root is two directories above the REAL path. Installed via install.sh
+this is `~/.archivist`; as a Claude plugin it is the plugin directory.
+`template/` and `hooks/` live there.
 
 ## 1. Interview (AskUserQuestion where possible, one topic at a time)
 

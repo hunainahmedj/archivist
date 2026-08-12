@@ -1,0 +1,22 @@
+{
+  "name": "archivist-docs",
+  "version": "0.2.0",
+  "description": "Documentation system: docs-repo template, session-end doc gate (Claude + Codex), skills for Claude Code, OpenCode, and Codex",
+  "bin": {
+    "archivist-install": "./install.sh"
+  },
+  "files": [
+    "install.sh",
+    "skills",
+    "template",
+    "hooks",
+    ".claude-plugin",
+    "README.md",
+    "LICENSE"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hunainahmedj/archivist"
+  }
+}

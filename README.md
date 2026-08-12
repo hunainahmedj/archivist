@@ -21,6 +21,50 @@ The knowledge lives in plain Markdown in git. Only the enforcement is per-tool �
 
 Or clone and add the local path. Requires: bash, git, python3 (stdlib only — no jq, no npm).
 
+## Using with Codex and OpenCode
+
+Claude Code loads archivist as a plugin. OpenCode and Codex don't have a
+plugin system, so they get the same skills (`docs-init`, `docs-audit`,
+`documenting`) through a small cross-tool installer instead — the same
+skill files, just symlinked into each tool's catalog rather than loaded
+through a plugin.
+
+- **Install**: one line, from a clone of this repo —
+
+  ```
+  bash install.sh
+  ```
+
+  (or, without cloning first, `npx github:hunainahmedj/archivist` — it
+  runs the same script). This syncs the archivist tree to `~/.archivist`
+  and symlinks each skill into `~/.codex/skills/<name>` and
+  `~/.config/opencode/skills/<name>`. Re-running is safe — it replaces
+  symlinks it created and never touches a real directory that already
+  occupies a skill's name (it warns and skips instead). Pass
+  `--uninstall` to remove exactly the symlinks it created;
+  `~/.claude/skills` is left alone by default (see below).
+
+- **Project briefing**: both tools pick up the project's `AGENTS.md`
+  pointer automatically — no extra wiring beyond what `/docs-init` already
+  writes into each repo.
+
+- **Session-end doc gate**: for Codex, this comes from the project's own
+  vendored hooks — `/docs-init` writes `<docs>/07-meta/hooks/` and each
+  repo's `.codex/hooks.json` for you, so enforcement travels with `git
+  clone` and needs no global install. There's no OpenCode gate adapter
+  yet — PRs welcome.
+
+- **Don't hand-copy skill folders.** Each `SKILL.md` resolves
+  `template/` and `hooks/` relative to its own real path, two directories
+  up — that only works through the symlinks this installer creates (or
+  the plugin install), not a manual `cp` of a skill directory somewhere
+  else.
+
+Claude Code users: skip this installer and use the plugin instead — pass
+`--claude-skills` only if you specifically want the skills symlinked into
+`~/.claude/skills` too (e.g. for testing); it does not carry the Stop
+hook that enforces the doc gate, which is the plugin's job.
+
 ## Quick start
 
 From your project's workspace root:

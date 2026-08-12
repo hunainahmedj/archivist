@@ -286,6 +286,71 @@ json.loads(t)
   check "guarded codex template parses as JSON after substitution" 0 $?
 }
 
+INSTALL_SH="$HERE/../install.sh"
+SKILLS_DIR="$HERE/../skills"
+
+test_install_sh_creates_catalogs() {
+  setup
+  HOME="$SANDBOX/home" bash "$INSTALL_SH" >/dev/null 2>&1
+  check "install.sh: exits 0 on fresh HOME" 0 $?
+
+  test -f "$SANDBOX/home/.archivist/skills/docs-init/SKILL.md"
+  check "install.sh: ~/.archivist/skills/docs-init/SKILL.md exists" 0 $?
+
+  test -L "$SANDBOX/home/.config/opencode/skills/docs-init"
+  check "install.sh: opencode docs-init is a symlink" 0 $?
+
+  python3 -c "
+import os, sys
+p = '$SANDBOX/home/.config/opencode/skills/docs-init/SKILL.md'
+sys.exit(0 if os.path.isfile(os.path.realpath(p)) else 1)
+"
+  check "install.sh: opencode docs-init resolves to a real SKILL.md" 0 $?
+
+  test -L "$SANDBOX/home/.codex/skills/docs-audit"
+  check "install.sh: codex docs-audit is a symlink" 0 $?
+
+  python3 -c "
+import os, sys
+p = '$SANDBOX/home/.codex/skills/docs-audit/SKILL.md'
+sys.exit(0 if os.path.isfile(os.path.realpath(p)) else 1)
+"
+  check "install.sh: codex docs-audit resolves to a real SKILL.md" 0 $?
+
+  [ ! -e "$SANDBOX/home/.claude/skills/docs-init" ]
+  check "install.sh: claude skills docs-init absent by default" 0 $?
+  teardown
+}
+
+test_install_sh_uninstall_removes_symlinks_keeps_tree() {
+  setup
+  HOME="$SANDBOX/home" bash "$INSTALL_SH" >/dev/null 2>&1
+  HOME="$SANDBOX/home" bash "$INSTALL_SH" --uninstall >/dev/null 2>&1
+  check "install.sh --uninstall: exits 0" 0 $?
+
+  [ ! -e "$SANDBOX/home/.config/opencode/skills/docs-init" ]
+  check "install.sh --uninstall: opencode symlink removed" 0 $?
+
+  [ ! -e "$SANDBOX/home/.codex/skills/docs-audit" ]
+  check "install.sh --uninstall: codex symlink removed" 0 $?
+
+  test -d "$SANDBOX/home/.archivist"
+  check "install.sh --uninstall: ~/.archivist tree still present" 0 $?
+  teardown
+}
+
+test_skill_naming_rules() {
+  for dir in "$SKILLS_DIR"/*/; do
+    name="$(basename "$dir")"
+    fm_name="$(grep -m1 '^name:' "$dir/SKILL.md" | sed 's/^name: *//' | tr -d '\r')"
+    [ "$name" = "$fm_name" ]
+    check "naming: $name dirname matches frontmatter name" 0 $?
+
+    echo "$name" | grep -Eq '^[a-z0-9]+(-[a-z0-9]+)*$'
+    check "naming: $name matches skill-name regex" 0 $?
+  done
+}
+
 test_no_config_allows
 test_embedded_code_change_blocks
 test_embedded_code_plus_docs_allows
@@ -310,6 +375,9 @@ test_claude_session_start_silent_when_healthy
 test_claude_session_start_silent_when_not_archivist
 test_cursor_adapter_prints_checklist_but_exits_0
 test_codex_template_valid_json_after_substitution
+test_install_sh_creates_catalogs
+test_install_sh_uninstall_removes_symlinks_keeps_tree
+test_skill_naming_rules
 
 echo "---"
 echo "pass=$PASS fail=$FAIL"
