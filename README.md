@@ -110,6 +110,46 @@ Both choices live in `.archivist.json` and every tool reads them from there.
 
 ## How the gate works
 
+### Documentation freshness before work
+
+Claude and Codex startup hooks fetch the docs repository's remote default branch
+before loading the briefing. Before each later feature in the same session,
+the project briefing and `archivist-documenting` skill also require:
+
+```sh
+python3 <docs>/07-meta/hooks/docs-freshness.py --cwd <docs> --briefing
+```
+
+Replace `<docs>` with the project's docs directory. Fetch prefers `origin`, or
+the sole configured remote, and discovers its default branch from the remote.
+It has a 20-second network budget and disables interactive Git prompts.
+
+Only a clean **dedicated docs repository on its default branch** is automatically
+fast-forwarded. Local commits, edits, staged/untracked files, special index flags,
+feature branches, detached HEADs and Git operations are preserved. Configured
+external checkout filters (including Git LFS) require a manual update. Ignored files
+are protected from incoming collisions. No stashing, resetting, rebasing, branch
+switching or pushing occurs. Embedded docs are fetched but never cause application
+code to be pulled. Repository Git hooks are disabled for the freshness check.
+The local fast-forward is allowed to finish rather than being killed mid-checkout;
+the timeout applies to network work. Custom fetch mappings cannot update local
+branches, and symbolic remote-tracking destinations require manual inspection.
+
+When a checkout cannot be updated, the hook names the fetched ref and supplies
+its published briefing alongside differing local context. Read module docs from
+that ref with `git show` and reconcile local work. Network failures are explicitly
+reported as **unverified**; they do not silently certify stale docs or block the
+whole agent session. A simultaneous check retains the checkout and reports the
+lock. If a crashed process leaves `archivist-freshness.lock` in the Git common
+directory, verify no check is running before removing that empty lock directory.
+
+Existing projects need their vendored `docs-freshness.py` and session-start adapter
+updated together, plus the before-feature instruction added to their briefing.
+Plugin updates alone do not replace project-owned files. `/archivist-init`
+describes the upgrade; preserve any locally customized hooks.
+
+### Documentation gate after work
+
 On session end, the hook discovers the project's docs tree (fast no-op exit for projects that don't use archivist), runs `git status` across the project's repos, and — if code files changed while the docs tree didn't — blocks the stop and hands the agent a checklist: *map each change to its doc home, update it, or state "No docs needed because …"*. The escape hatch is deliberate: the gate forces the **decision** to be explicit, not the paperwork. Loop protection guarantees it never fires twice in one turn, and `/archivist-audit` is the backstop for whatever slips through (committed work, hookless tools, humans). The checklist itself fires once per session per change-set — a repeat stop with the identical files stays silent, and new changes entering the set re-trigger it.
 
 Claude Code uses the plugin's Stop hook. For Codex, `/archivist-init` vendors the same core script plus adapters into `07-meta/hooks/` — inside the docs repo, so enforcement travels with `git clone`, no plugin install needed — and a `SessionStart` hook injects `AGENTS.md` into Codex sessions, emulating Claude's `@import`.
@@ -127,6 +167,7 @@ Claude Code uses the plugin's Stop hook. For Codex, `/archivist-init` vendors th
 
 ```
 ./tests/run-tests.sh    # bash test suite for the gate + adapters (real git fixtures)
+python3 -m unittest discover -s tests -p 'test_docs_freshness.py'
 ```
 
 The core (`hooks/doc-gate.sh`) is dependency-free bash 3.2 + python3 stdlib, exit contract `0` allow / `3` block; adapters translate per tool (Claude/Codex: exit 2 + stderr).

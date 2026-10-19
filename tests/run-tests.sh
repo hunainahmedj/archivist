@@ -242,11 +242,11 @@ test_claude_session_start_notices_missing_docs() {
   teardown
 }
 
-test_claude_session_start_silent_when_healthy() {
+test_claude_session_start_reports_missing_remote() {
   setup; sibling_ws
   out="$(cd "$SANDBOX/ws/backend" && bash "$CLAUDE_SESSION_START" 2>/dev/null)"
-  [ -z "$out" ]
-  check "claude session-start: silent when docs repo present" 0 $?
+  printf '%s' "$out" | grep -q "unverified"
+  check "claude session-start: docs without a remote report unverified freshness" 0 $?
   teardown
 }
 
@@ -408,7 +408,7 @@ test_claude_adapter_respects_stop_active
 test_codex_adapter_blocks_alt_fields
 test_codex_session_start_injects_briefing
 test_claude_session_start_notices_missing_docs
-test_claude_session_start_silent_when_healthy
+test_claude_session_start_reports_missing_remote
 test_claude_session_start_silent_when_not_archivist
 test_cursor_adapter_prints_checklist_but_exits_0
 test_codex_template_valid_json_after_substitution
