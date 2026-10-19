@@ -21,6 +21,15 @@ context; do not ask the user to re-explain what is written here.
 
 ## Rules
 
+- Before starting a new feature, run
+  `python3 <docs>/07-meta/hooks/docs-freshness.py --cwd <docs> --briefing`,
+  replacing `<docs>` with this docs directory. This fetches published docs and
+  safely fast-forwards a clean dedicated docs checkout on its default branch.
+  If the checkout is retained, read the relevant module/decisions from the
+  reported fetched ref with `git show` and reconcile local work. Do not erase
+  local changes to force an update. If freshness is unverified, disclose that
+  limitation and retry when the remote is available. Repeat for a new feature
+  in the same session; a startup check alone is not enough.
 - Documentation lives in this tree and is maintained continuously. When
   you change code, update the matching docs in the same session, following
   [07-meta/documentation-guide.md](07-meta/documentation-guide.md).

@@ -18,5 +18,8 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/hunainahmedj/archivist"
+  },
+  "scripts": {
+    "test": "bash tests/run-tests.sh && python3 -m unittest discover -s tests -p 'test_docs_freshness.py'"
   }
 }

@@ -52,9 +52,15 @@ this is `~/.archivist`; as a Claude plugin it is the plugin directory.
 
 - `mkdir -p <docs>/07-meta/hooks`
 - Copy from the plugin: `hooks/doc-gate.sh`,
+  `hooks/docs-freshness.py`,
   `hooks/codex/codex-stop.sh`, `hooks/codex/codex-session-start.sh`,
   `hooks/cursor/cursor-stop.sh` into `<docs>/07-meta/hooks/` (flat).
-  `chmod +x` all four.
+  `chmod +x` the four shell scripts; invoke the freshness helper with `python3`.
+  For an existing project, compare and refresh these vendored files without
+  replacing locally customized hooks blindly. Add the before-feature freshness
+  instruction from `template/AGENTS.md` to the existing briefing without
+  replacing its project context. Updating the plugin alone does not update
+  a project's vendored hooks.
 - For each code repo, write `.codex/hooks.json` from
   `hooks/codex/hooks.json.template`, substituting `{{HOOKS_DIR}}` with
   the relative path from the repo root to `<docs>/07-meta/hooks`
@@ -75,6 +81,9 @@ this is `~/.archivist`; as a Claude plugin it is the plugin directory.
 - AGENTS.md (repo root): create or prepend so the file STARTS with:
   "Before non-trivial work, read <path-to-docs>/AGENTS.md (project
   briefing) and the relevant module doc under <path-to-docs>/04-modules/."
+  Include: "Before new feature work, run
+  `python3 <path-to-docs>/07-meta/hooks/docs-freshness.py --cwd <path-to-docs> --briefing`
+  and follow its freshness notice before reading module docs."
   Sibling layout, when the repo has a remote configured (`git remote
   get-url origin` on the docs repo): also include a line
   `Docs repo: <remote URL> (clone as sibling docs/)` — this is what lets
